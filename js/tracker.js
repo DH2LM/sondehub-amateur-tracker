@@ -2442,6 +2442,7 @@ var array_unique = function(inarr) {
 
 function addPosition(position) {
     var vcallsign = position.vehicle;
+    // console.log(vcallsign);
 
     // check if the vehicle is already in the list, if not create a new item
     if(!vehicles.hasOwnProperty(vcallsign)) {
@@ -2523,11 +2524,13 @@ function addPosition(position) {
             });
 
             marker.addTo(map);
-        } else {
+        }
+        else {
             vehicle_type = "balloon";
             color_index = balloon_index++ % balloon_colors.length;
 
-            image_src = host_url + markers_url + "balloon-" +
+            if(vcallsign == "DL24ENTE") image_src = host_url + markers_url + "balloon-ente.png";
+            else image_src = host_url + markers_url + "balloon-" +
                         ((vcallsign == "PIE") ? "rpi" : balloon_colors_name[color_index]) + ".png";
             image_src_size = [46,84];
             image_src_offset = [-35,-46];
@@ -2574,6 +2577,7 @@ function addPosition(position) {
 
             marker.shadow = marker_shadow;
             marker.balloonColor = (vcallsign == "PIE") ? "rpi" : balloon_colors_name[color_index];
+            marker.balloonColor = (vcallsign == "DL24ENTE") ? "ente" : balloon_colors_name[color_index];
             marker.mode = 'balloon';
             marker.setMode = function(mode) {
                 if(this.mode == mode) return;
@@ -2587,7 +2591,14 @@ function addPosition(position) {
                     map.removeLayer(vehicle.horizon_circle_title);
                     map.removeLayer(vehicle.subhorizon_circle_title);
 
+                    if(this.balloonColor == "ente") 
                     img = new L.icon ({
+                        iconUrl: host_url + markers_url + "payload-" + this.balloonColor + ".png",
+                        iconSize: [48,70],
+                        iconAnchor: [24,70],
+                        tooltipAnchor: [0,-20],
+                    });
+                    else img = new L.icon ({
                         iconUrl: host_url + markers_url + "payload-" + this.balloonColor + ".png",
                         iconSize: [17,18],
                         iconAnchor: [8,14],
@@ -2602,6 +2613,8 @@ function addPosition(position) {
                         map.addLayer(vehicle.horizon_circle_title);
                         map.addLayer(vehicle.subhorizon_circle_title);
                     }
+
+                    // mode = "parachute";
 
                     if(mode == "parachute") {
                         img = new L.icon ({
