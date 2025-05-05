@@ -269,6 +269,76 @@ var offline = {
 var DEG_TO_RAD = Math.PI / 180.0;
 var EARTH_RADIUS = 6371000.0;
 
+
+//Function to check if a file exists in the marker file list
+//useful for checking for files following the format {prefix}-{name}.{ext}, e.g. balloon-DH2LM.png
+function checkFileInList(prefix, name, extension)
+{
+    let fileName = prefix + "-" + name + "." + extension;
+
+    if(ajax_marker_filelist != null)
+    {
+        if(ajax_marker_filelist.includes(fileName))
+        {
+            console.log("File list includes filename " + fileName);
+            return true;
+        }
+        else
+        {
+            console.log("File list does not include filename " + fileName);
+            return false;
+        }
+    }
+    else return false;
+}
+
+
+function getMarkerList(url)
+{
+	//Create an XMLHttpRequest to get directory listing from Apache2
+	var xhr = new XMLHttpRequest();
+	
+	//Specify the URL
+	xhr.open('GET', url, false);
+
+	//Send out the request
+	xhr.send();
+
+	//Read the received data
+	//console.log(xhr.responseText);
+	let rawData = xhr.responseText;
+	// console.log(rawData);
+
+	//Parse file names and tokenize them
+	let fileList = parseDirectoryListing(rawData);
+
+	//Check, only for debugging
+	// console.log(fileList.includes("balloon-DH2LM.png"));
+
+	return fileList;
+}
+
+//Function for extracting file names out of Apache2 directory listings
+function parseDirectoryListing(rawList)
+{
+     //Extract all hyperlinks
+     let rawFileList = rawList.match(/href="([\.\_\-\w\d]+)/g);
+	          // .map((x) => x.replace('href="', '')); // pull out the hrefs and clean up
+     let fileList = rawFileList;
+     
+     //Remove all hrefs
+     for(var i=0; i<fileList.length; i++) {
+	let val = fileList[i];
+	val = val.replace('href="', '');
+	fileList[i] = val;
+	// console.log(val);
+     }
+
+     // console.log(fileList);
+     return fileList;
+}
+
+
 // calculates look angles between two points
 // format of a and b should be {lon: 0, lat: 0, alt: 0}
 // returns {elevention: 0, azimut: 0, bearing: "", range: 0}
@@ -1293,6 +1363,9 @@ function updateVehicleInfo(vcallsign, newPosition) {
     } else {
         vehicle.marker.setMode("parachute");
     }
+
+    //Override for testing
+    //vehicle.marker.setMode("parachute");
 
     // Update landing marker if data is available
     if (newPosition.data.hasOwnProperty("pred_lat") && newPosition.data.hasOwnProperty("pred_lon")){
@@ -2529,7 +2602,7 @@ function addPosition(position) {
             vehicle_type = "balloon";
             color_index = balloon_index++ % balloon_colors.length;
 
-            if(vcallsign == "DL24ENTE") image_src = host_url + markers_url + "balloon-ente.png";
+            if(checkFileInList("balloon", vcallsign, "png")) image_src = host_url + markers_url + "balloon-"+vcallsign+".png";
             else image_src = host_url + markers_url + "balloon-" +
                         ((vcallsign == "PIE") ? "rpi" : balloon_colors_name[color_index]) + ".png";
             image_src_size = [46,84];
@@ -2577,7 +2650,9 @@ function addPosition(position) {
 
             marker.shadow = marker_shadow;
             marker.balloonColor = (vcallsign == "PIE") ? "rpi" : balloon_colors_name[color_index];
-            marker.balloonColor = (vcallsign == "DL24ENTE") ? "ente" : balloon_colors_name[color_index];
+            // marker.balloonColor = (checkFileInList("balloon", vcallsign, "png")) ? vcallsign : balloon_colors_name[color_index];
+            marker.balloonColor = vcallsign;
+	    marker.balloonAltColor = balloon_colors_name[color_index];
             marker.mode = 'balloon';
             marker.setMode = function(mode) {
                 if(this.mode == mode) return;
@@ -2591,12 +2666,18 @@ function addPosition(position) {
                     map.removeLayer(vehicle.horizon_circle_title);
                     map.removeLayer(vehicle.subhorizon_circle_title);
 
-                    if(this.balloonColor == "ente") 
+                    //Provide an alternative color if there is no payload image
+                    //Here custom payload images are designed to be slightly larger than original ones,
+                    //So a fallback mechanism is implemented if there is no payload image.
+                    var payloadImgExists = checkFileInList("payload", vcallsign, "png");
+                    var payloadColor = payloadImgExists ? vcallsign : this.balloonAltColor;
+
+                    if(this.balloonColor == vcallsign)
                     img = new L.icon ({
-                        iconUrl: host_url + markers_url + "payload-" + this.balloonColor + ".png",
-                        iconSize: [48,70],
-                        iconAnchor: [24,70],
-                        tooltipAnchor: [0,-20],
+                        iconUrl: host_url + markers_url + "payload-" + payloadColor + ".png",
+                        iconSize: (payloadImgExists ? [30, 37] : [17,18]),
+                        iconAnchor: (payloadImgExists ? [15,33] : [8, 14]),
+                        tooltipAnchor: (payloadImgExists ? [0,10] : [0, -20]),
                     });
                     else img = new L.icon ({
                         iconUrl: host_url + markers_url + "payload-" + this.balloonColor + ".png",
@@ -2614,18 +2695,28 @@ function addPosition(position) {
                         map.addLayer(vehicle.subhorizon_circle_title);
                     }
 
-                    // mode = "parachute";
+		    // this.mode = 'parachute';
+
+                    //Provide an alternative color if there is no parachute image
+                    let parachuteImgExists = checkFileInList("parachute", vcallsign, "png");
+                    var parachuteColor = parachuteImgExists ? vcallsign : this.balloonAltColor;
+                    parachuteColor = (this.balloonColor == vcallsign) ? parachuteColor : this.balloonColor;
+
+                    //Also provide an alternative color if there is no balloon image for some reason :)
+                    let balloonImgExists = checkFileInList("balloon", vcallsign, "png");
+                    var balloonColor = balloonImgExists ? vcallsign : this.balloonAltColor;
+                    balloonColor = (this.balloonColor == vcallsign) ? balloonColor : this.balloonColor;
 
                     if(mode == "parachute") {
-                        img = new L.icon ({
-                            iconUrl: host_url + markers_url + "parachute-" + this.balloonColor + ".png",
+			img = new L.icon ({
+                            iconUrl: host_url + markers_url + "parachute-" + parachuteColor + ".png",
                             iconSize: [46,84],
                             tooltipAnchor: [0,-98],
                             iconAnchor: [23,90],
                         });
                     } else {
                         img = new L.icon ({
-                            iconUrl: host_url + markers_url + "balloon-" + this.balloonColor + ".png",
+                            iconUrl: host_url + markers_url + "balloon-" + balloonColor + ".png",
                             iconSize: [46,84],
                             tooltipAnchor: [0,-98],
                             iconAnchor: [23,90],
@@ -3345,6 +3436,7 @@ var ajax_inprogress = false;
 var ajax_inprogress_single = false;
 var ajax_inprogress_single_new = false;
 var ajax_positions_first_update_complete = false;
+var ajax_marker_filelist = null;
 
 function refresh() {
   if(ajax_inprogress) {
@@ -3367,6 +3459,9 @@ function refresh() {
     var data_str = "duration=" + mode;
     setLongTimePeriods(false);
   }
+
+  //Get current file list for the markers
+  ajax_marker_filelist = getMarkerList(host_url + markers_url);
 
   ajax_positions = $.ajax({
     type: "GET",
